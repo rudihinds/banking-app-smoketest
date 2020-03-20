@@ -2,7 +2,7 @@ def github_id = 'CHANGEME'
 
 def namespace = github_id.toLowerCase()
 def git_repository = "https://github.com/${github_id}/banking-app-smoketest"
-def app_url = "http://${namespace}-app.apps.prod.training.armakuni.co.uk"
+def app_url = "http://${namespace}-app.apps.prod.practices.armakuni.co.uk"
 
 def label = "build-${UUID.randomUUID().toString()}"
 def build_pod_template = """

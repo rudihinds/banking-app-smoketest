@@ -15,7 +15,7 @@ value_or_default(){
 
 build_image(){
     service_name=$1
-    image_name=${2:-"aklearning/eng-lab-$service_name"}
+    image_name=${2:-"sepractices/eng-lab-$service_name"}
     dockerfile=${3:-Dockerfile}
 
     pushd "$service_name"

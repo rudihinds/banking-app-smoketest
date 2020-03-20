@@ -1,7 +1,7 @@
 version: "3"
 services:
     api-gateway:
-      image: traefik
+      image: traefik:v1.7
       command: --api --web --docker --docker.domain=docker.localhost --docker.exposedbydefault=false --logLevel=INFO
       ports:
       - "80:80"     # The HTTP port
