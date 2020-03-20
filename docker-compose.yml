@@ -1,0 +1,187 @@
+version: "3"
+services:
+    api-gateway:
+      image: traefik
+      command: --api --web --docker --docker.domain=docker.localhost --docker.exposedbydefault=false --logLevel=INFO
+      ports:
+      - "80:80"     # The HTTP port
+      - "8080:8080" # Dashboard port
+      volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /dev/null:/traefik.toml
+    message-bus:
+      image: 'rabbitmq:3-management'
+      ports:
+        - "5672"
+        - 15672:15672
+      networks:
+        - default
+    # transaction-service
+    transaction-service:
+      build: ../transaction-service
+      restart: always
+      ports:
+        - "5000"
+      volumes:
+        - ../transaction-service:/app
+      depends_on:
+        - message-bus
+        - transaction-service-db
+      environment:
+        PORT: 5000
+        RABBITMQ_PORT: 5672
+        RABBITMQ_HOST: message-bus
+        ACCOUNT_SERVICE_URL: http://account-service:5000
+        DB_HOST: transaction-service-db
+        DB_PORT: 5432
+        DB_USERNAME: guest
+        DB_PASSWORD: guest
+      networks:
+        - default
+    transaction-service-db:
+      image: postgres:latest
+      ports:
+        - "5432"
+      environment:
+        POSTGRES_PASSWORD: guest
+        POSTGRES_USER: guest
+        POSTGRES_DB: transaction-service
+      networks:
+        - default
+    # customer-service
+    customer-service:
+      build: ../customer-service
+      restart: always
+      ports:
+        - "5000"
+      volumes:
+        - ../customer-service:/app
+      environment:
+        PORT: 5000
+        DB_HOST: customer-service-db
+        DB_PORT: 5432
+        DB_USERNAME: guest
+        DB_PASSWORD: guest
+        DB_NAME: customer-service
+      depends_on:
+          - transaction-service-db
+      networks:
+        - default
+      labels:
+       - "traefik.enable=true"
+       - "traefik.port=5000"
+       - "traefik.backend=customer-service"
+       - "traefik.frontend.rule=PathPrefix:/customers/"
+    customer-service-db:
+       image: postgres:latest
+       ports:
+           - "5432"
+       environment:
+           POSTGRES_PASSWORD: guest
+           POSTGRES_USER: guest
+           POSTGRES_DB: customer-service
+       networks:
+           - default
+    # account-service
+    account-service:
+      build: ../account-service
+      restart: always
+      ports:
+        - "5000"
+      volumes:
+        - ../account-service:/app
+      environment:
+        PORT: 5000
+        CUSTOMER_SERVICE_URL: http://customer-service:5000
+        DB_HOST: account-service-db
+        DB_PORT: 5432
+        DB_USERNAME: guest
+        DB_PASSWORD: guest
+      networks:
+        - default
+      labels:
+       - "traefik.enable=true"
+       - "traefik.port=5000"
+       - "traefik.backend=account-service"
+       - "traefik.frontend.rule=PathPrefix:/accounts/"
+    account-service-db:
+      image: postgres:latest
+      ports:
+        - "5432"
+      environment:
+        POSTGRES_PASSWORD: guest
+        POSTGRES_USER: guest
+        POSTGRES_DB: account-service
+      networks:
+        - default
+    # cashier-service
+    cashier-service:
+      build: ../cashier-service
+      restart: always
+      ports:
+        - "5000"
+      volumes:
+        - ../cashier-service:/app
+      environment:
+        PORT: 5000
+        RABBITMQ_PORT: 5672
+        RABBITMQ_HOST: message-bus
+        RABBITMQ_EXCHANGE_NAME: transactions
+      depends_on:
+        - message-bus
+      networks:
+        - default
+      labels:
+       - "traefik.enable=true"
+       - "traefik.port=5000"
+       - "traefik.backend=cashier-service"
+       - "traefik.frontend.rule=PathPrefix:/cashier/"
+    # balance-service
+    balance-service-app:
+      build:
+        context: ../balance-service/
+        dockerfile: Dockerfile.app
+      restart: always
+      volumes:
+        - ../balance-service:/app
+      ports:
+        - 5000
+      depends_on:
+        - balance-store
+      environment:
+        PORT: 5000
+        REDIS_URL: redis://balance-store:6379
+        BALANCE_NAMESPACE: balance
+      labels:
+       - "traefik.enable=true"
+       - "traefik.port=5000"
+       - "traefik.backend=balance-app"
+       - "traefik.frontend.rule=PathPrefix:/balance/"
+      networks:
+        - default
+    balance-store:
+      image: redis
+      ports:
+        - "6379"
+    balance-worker:
+      build:
+        context: ../balance-service/
+        dockerfile: Dockerfile.worker
+      restart: always
+      depends_on:
+        - message-bus
+        - balance-store
+      volumes:
+        - ../balance-service:/app
+      environment:
+        REDIS_URL: redis://balance-store:6379
+        BALANCE_NAMESPACE: balance
+        RABBITMQ_PORT: 5672
+        RABBITMQ_HOST: message-bus
+        RABBITMQ_CONSUMER_EXCHANGE: balance_updates
+        RABBITMQ_CONSUMER_QUEUE: balance_updates
+      networks:
+        - default
+
+networks:
+  default:
