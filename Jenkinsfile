@@ -1,4 +1,4 @@
-def github_id = 'CHANGEME'
+def github_id = 'rudihinds'
 
 def namespace = github_id.toLowerCase()
 def git_repository = "https://github.com/${github_id}/banking-app-smoketest"
